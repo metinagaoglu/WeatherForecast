@@ -13,7 +13,7 @@ import CoreLocation
 class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource,CLLocationManagerDelegate {
 
    
-    var weatherList = [WeatherModel]()
+    var weatherList = [WeatherData]()
     
     // Location Manager
     var locationManager = CLLocationManager()
@@ -41,8 +41,12 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     
     // Location Result
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-
-        getRequest(lat: locations[0].coordinate.latitude,long: locations[0].coordinate.longitude)
+        if let location = locations.first {
+            print("Found user's location: \(location)")
+            getRequest(lat: locations[0].coordinate.latitude,long: locations[0].coordinate.longitude)
+        }
+        
+        
     }
 
     // TableView Func
@@ -60,70 +64,45 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
 
     // Get Request
     func getRequest(lat:Double,long:Double){
+        
         let langCode:String
         let lang = Locale.current.languageCode
         
-        langCode = lang as String
+        langCode = lang as! String
+
+        let url = URL(string: "http://api.openweathermap.org/data/2.5/forecast?lat=\(lat)&lon=\(long)&appid=0bc0a3423e91f20c18d183efbde496e8&lang=\(langCode)")
         
-        let _url = URL(string: "http://api.openweathermap.org/data/2.5/forecast?lat=\(lat)&lon=\(long)&appid=(appid)&lang=\(langCode)")
+        //print(url)
         
-        let task = URLSession.shared.dataTask(with: _url!) { (data, response, error) in
+        let myData = try! Data(contentsOf: url!)
+        let jsonDecoder = JSONDecoder()
+    
+        let results = try? jsonDecoder.decode(WeatherModel.self, from: myData)
+        
+        self.infoText.text = results?.list.first?.weather[0].description
+        self.locationText.text = results?.city.name
+        
+        let firstIconURL = imagePath(icon: (results?.list.first?.weather[0].icon)!)
+        self.iconImageView.kf.setImage(with: URL(string:firstIconURL))
+        
+        for item in (results?.list)! {
             
-            if error == nil{
-               
-                do{
-                     let jsonResult = try JSONSerialization.jsonObject(with: data!, options: .allowFragments) as! Dictionary<String,AnyObject>
-                    
-                    
-                    DispatchQueue.main.async {
-                    
-                        var counter:Int = 0;
-                        
-                        var _locationInfoServer = ""
-                        let name = jsonResult["city"]!["name"] as! String
-                        let country = jsonResult["city"]!["country"] as! String
-                        _locationInfoServer = "\(name),\(country)"
-                        
-                        for item in jsonResult["list"]  as! [Dictionary<String, AnyObject>]
-                        {
-                     
-                            var parentDesc = "";
-                            var iconUrl = "";
-                            
-                            for wItem in item["weather"] as! [Dictionary<String, AnyObject>] {
-                                parentDesc = wItem["description"] as! String
-                                iconUrl = "http://openweathermap.org/img/w/"+(wItem["icon"]! as! String)+".png"
-                            }
-                            
-                            if counter == 0{
-                                self.infoText.text = parentDesc
-                                self.locationText.text = _locationInfoServer
-                                self.iconImageView.kf.setImage(with: URL(string: iconUrl))
-                            }
-                            
-                            counter += 1;
-                            
-                            let desc:String = parentDesc
-                            let date:String = item["dt_txt"] as! String
-                            
-                            let weatherM = WeatherModel()
-                            weatherM.description = desc
-                            weatherM.dt_txt = date
-                            weatherM.iconURL = iconUrl
-                            self.weatherList.append(weatherM)
-                        }
-                        
-                        self.tableView.reloadData()
-                    }
-                }catch{
-                    print("hata")
-                }
-            }
+            let wData = WeatherData()
+            wData.description = item.weather[0].description
+            wData.iconURL = imagePath(icon: item.weather[0].icon)
+            wData.dt_txt = String(item.dt_txt)
             
+           self.weatherList.append(wData)
+         
         }
         
-        task.resume()
+        self.tableView.reloadData()
         
+    }
+    
+    func imagePath(icon:String)->String {
+        let path = "http://openweathermap.org/img/w/"+icon+".png"
+        return path
     }
 
 }
